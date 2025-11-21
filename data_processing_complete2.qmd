@@ -1,0 +1,174 @@
+---
+title: "Data Processing for Dashboard"
+subtitle: "USM RCMO Health Campus"
+format: html
+editor: visual
+---
+
+## Load Required Packages
+
+```{r}
+#| label: load-packages
+#| message: false
+#| warning: false
+
+library(readxl)
+library(tidyverse)
+library(gtsummary)
+```
+
+## Convert Excel Files to CSV
+
+```{r}
+#| label: convert-to-csv
+#| message: false
+
+# Read Excel files
+staff_demography_data <- read_excel("0_STAFF.xlsx")
+geran_data <- read_excel("1_GERAN.xlsx")
+innovation_data <- read_excel("2_INNOVATION.xlsx")
+kepakaran_data <- read_excel("3_KEPAKARAN.xlsx")
+penerbitan_data <- read_excel("4_PENERBITAN.xlsx")
+
+# Convert to CSV
+write_csv(staff_demography_data, "staff_demography.csv")
+write_csv(geran_data, "geran.csv")
+write_csv(innovation_data, "innovation.csv")
+write_csv(kepakaran_data, "kepakaran.csv")
+write_csv(penerbitan_data, "penerbitan.csv")
+
+cat("CSV files created successfully!\n")
+```
+
+## Rename Columns to Standard Convention
+
+```{r}
+#| label: rename-columns
+#| message: false
+
+# Function to convert column names to snake_case and standardize staff_id
+standardize_names <- function(data) {
+  data %>%
+    rename_with(~janitor::make_clean_names(.), everything()) %>%
+    # Standardize staff_id column: rename no_staf or staff_no to staff_id
+    rename_with(~if_else(. %in% c("no_staf", "staff_no"), "staff_id", .), everything())
+}
+
+# Apply standardization to all datasets
+staff_demography_data <- standardize_names(staff_demography_data)
+geran_data <- standardize_names(geran_data)
+innovation_data <- standardize_names(innovation_data)
+kepakaran_data <- standardize_names(kepakaran_data)
+penerbitan_data <- standardize_names(penerbitan_data)
+
+# Display column names for verification
+cat("Staff Demography columns:\n")
+print(colnames(staff_demography_data))
+
+cat("\nGeran columns:\n")
+print(colnames(geran_data))
+
+cat("\nInnovation columns:\n")
+print(colnames(innovation_data))
+
+cat("\nKepakaran columns:\n")
+print(colnames(kepakaran_data))
+
+cat("\nPenerbitan columns:\n")
+print(colnames(penerbitan_data))
+```
+
+## Keep important columns only
+
+-   as data will be huge after merging the datasets, we will only keep important columns for dashboard
+
+### kepakaran_data
+
+-   variables to keep: staff_id, status_staf, jabatan, division, category, group, area, tahap, scopus_citations, scopus_publications, scopus_hindex
+```{r}
+kepakaran_data <- 
+  kepakaran_data |> 
+  select(staff_id, divison, category, group, area, tahap, scopus_citations, scopus_publications, scopus_hindex)
+```
+
+### geran_data
+
+-   variables to keep: staff_id, year, status_pi, category, status_projek_aktif, kod_projek_jika_ada,
+-   sponsor_category_university_national_private_international,
+
+```{r}
+geran_data <- geran_data |>
+  select(staff_id, year, status_pi, category, status_projek_aktif_tamat_beku_dll, kod_projek_jika_ada, sponsor_category_university_national_private_international)
+
+```
+
+### innovation_data
+
+-   variables to keep: staff_id, year, patent_id_no, company_name_product_spin_off, name_of_technology type_licensed_outright, name_of_ip_title, type_copyright_trademark_industrial_design_etc
+
+```{r}
+innovation_data <- 
+  innovation_data |> 
+  select(staff_id, year, patent_id_no, company_name_product_spin_off, name_of_technology, type_licensed_outright, name_of_ip_title, type_copyright_trademark_industrial_design_etc)
+```
+
+#### staff_demography_data
+
+-   variables to keep: staff_id, name, grade, cohort, academic_qualification_phd_master, authors_id_scopus, department_faculty, s_t_non_s_t, status_1_active_study_leaves_sabbatical_training_attachment_seconded, status_2_permanent_contract, status_3_full_time_part_time ,status_4_active_staff_yes_no, citizenship_local_foreign, country, gender
+
+```{r}
+staff_demography_data <- staff_demography_data |> 
+  select(staff_id, name, grade, cohort, academic_qualification_phd_master, authors_id_scopus, department_faculty, s_t_non_s_t, status_1_active_study_leaves_sabbatical_training_attachment_seconded, status_2_permanent_contract, status_3_full_time_part_time ,status_4_active_staff_yes_no, citizenship_local_foreign, country)
+```
+
+### penerbitan_data
+
+-   variables to keep: staff_id, year, type_of_publication, document_type_scopus_wos_clasification,
+-   source_title_journal_title, q1_or_q2_only_blank_if_no_data, publisher, database_source_scopus_wos_era, book_status_indexed_not_indexed
+
+```{r}
+penerbitan_data <- 
+  penerbitan_data |> 
+  select(staff_id, year, type_of_publication, document_type_scopus_wos_clasification, source_title_journal_title, q1_or_q2_only_blank_if_no_data, publisher, database_source_scopus_wos_era, book_status_indexed_not_indexed)
+```
+
+## Competency for 2024
+
+### Publications count for 2024
+```{r}
+count_publications_2024 <- penerbitan_data |>
+  filter(year == 2024) |>
+  group_by(staff_id, year, type_of_publication) |>
+  summarize(publications_count = n(), .groups = "drop") |>
+  arrange(staff_id)
+```
+
+### Grants count for 2024
+
+```{r}
+count_grants_2024 <- geran_data |>
+  filter(year == 2024) |>
+  group_by(staff_id, year, status_pi) |>
+  summarize(grants_count = n(), .groups = "drop") |>
+  arrange(staff_id)
+```
+
+### Innovations count for 2024
+
+```{r}
+count_innovations_2024 <- innovation_data |>
+  filter(year == 2024) |>
+  group_by(staff_id, year) |>
+  summarize(innovations_count = n(), .groups = "drop") |>
+  arrange(staff_id)
+```
+
+## Merge with demography
+
+```{r}
+merged_staff_2024 <- staff_demography_data |>
+  left_join(count_publications_2024, by = "staff_id") |>
+  left_join(count_grants_2024, by = "staff_id") |>
+  left_join(count_innovations_2024, by = "staff_id")
+```
+
