@@ -15,6 +15,7 @@ editor: visual
 library(readxl)
 library(tidyverse)
 library(gtsummary)
+library(lubridate)
 ```
 
 ## Convert Excel Files to CSV
@@ -29,6 +30,9 @@ geran_data <- read_excel("1_GERAN.xlsx")
 innovation_data <- read_excel("2_INNOVATION.xlsx")
 kepakaran_data <- read_excel("3_KEPAKARAN.xlsx")
 penerbitan_data <- read_excel("4_PENERBITAN.xlsx")
+
+# Convert year from str to dbl in penerbitan_data
+penerbitan_data <- penerbitan_data |> mutate(YEAR = as.numeric(YEAR))
 
 # Convert to CSV
 write_csv(staff_demography_data, "staff_demography.csv")
@@ -85,10 +89,11 @@ print(colnames(penerbitan_data))
 ### kepakaran_data
 
 -   variables to keep: staff_id, status_staf, jabatan, division, category, group, area, tahap, scopus_citations, scopus_publications, scopus_hindex
+
 ```{r}
 kepakaran_data <- 
   kepakaran_data |> 
-  select(staff_id, divison, category, group, area, tahap, scopus_citations, scopus_publications, scopus_hindex)
+  select(staff_id, scopus_citations, scopus_publications, scopus_hindex)
 ```
 
 ### geran_data
@@ -98,7 +103,8 @@ kepakaran_data <-
 
 ```{r}
 geran_data <- geran_data |>
-  select(staff_id, year, status_pi, category, status_projek_aktif_tamat_beku_dll, kod_projek_jika_ada, sponsor_category_university_national_private_international)
+  select(staff_id, year, status_pi, category, status_projek_aktif_tamat_beku_dll, kod_projek_jika_ada, sponsor_category_university_national_private_international) |>
+filter(status_pi == "YES")
 
 ```
 
@@ -129,17 +135,23 @@ staff_demography_data <- staff_demography_data |>
 ```{r}
 penerbitan_data <- 
   penerbitan_data |> 
-  select(staff_id, year, type_of_publication, document_type_scopus_wos_clasification, source_title_journal_title, q1_or_q2_only_blank_if_no_data, publisher, database_source_scopus_wos_era, book_status_indexed_not_indexed)
+  select(staff_id, year, type_of_publication,  q1_or_q2_only_blank_if_no_data, database_source_scopus_wos_era)
 ```
 
 ## Competency for 2024
 
 ### Publications count for 2024
+
 ```{r}
 count_publications_2024 <- penerbitan_data |>
   filter(year == 2024) |>
   group_by(staff_id, year, type_of_publication) |>
   summarize(publications_count = n(), .groups = "drop") |>
+  pivot_wider(
+    names_from = type_of_publication,
+    values_from = publications_count,
+    values_fill = 0
+  ) |>
   arrange(staff_id)
 ```
 
@@ -148,8 +160,13 @@ count_publications_2024 <- penerbitan_data |>
 ```{r}
 count_grants_2024 <- geran_data |>
   filter(year == 2024) |>
-  group_by(staff_id, year, status_pi) |>
+  group_by(staff_id, year, category) |>
   summarize(grants_count = n(), .groups = "drop") |>
+  pivot_wider(
+    names_from = category,
+    values_from = grants_count,
+    values_fill = 0
+  ) |>
   arrange(staff_id)
 ```
 
@@ -163,12 +180,19 @@ count_innovations_2024 <- innovation_data |>
   arrange(staff_id)
 ```
 
+## Merge count datasets for 2024
+
+```{r}
+merged_counts_2024 <- count_publications_2024 |> 
+  full_join(count_grants_2024, by = "staff_id") |> 
+  full_join(count_innovations_2024, by = "staff_id") |> 
+  select(!(year)) |> 
+  rename(year = year.x) |>
+  mutate(across(everything(), ~replace_na(., 0)))
+```
+
 ## Merge with demography
 
 ```{r}
-merged_staff_2024 <- staff_demography_data |>
-  left_join(count_publications_2024, by = "staff_id") |>
-  left_join(count_grants_2024, by = "staff_id") |>
-  left_join(count_innovations_2024, by = "staff_id")
-```
 
+```
