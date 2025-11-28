@@ -1,4 +1,5 @@
 ---
+Comp---
 title: "Data Processing for Dashboard"
 subtitle: "USM RCMO Health Campus"
 format: html
@@ -123,8 +124,13 @@ innovation_data <-
 -   variables to keep: staff_id, name, grade, cohort, academic_qualification_phd_master, authors_id_scopus, department_faculty, s_t_non_s_t, status_1_active_study_leaves_sabbatical_training_attachment_seconded, status_2_permanent_contract, status_3_full_time_part_time ,status_4_active_staff_yes_no, citizenship_local_foreign, country, gender
 
 ```{r}
-staff_demography_data <- staff_demography_data |> 
-  select(staff_id, name, grade, cohort, academic_qualification_phd_master, authors_id_scopus, department_faculty, s_t_non_s_t, status_1_active_study_leaves_sabbatical_training_attachment_seconded, status_2_permanent_contract, status_3_full_time_part_time ,status_4_active_staff_yes_no, citizenship_local_foreign, country)
+staff_demography_data_2024 <- staff_demography_data |> 
+  select(staff_id, year, name, grade, cohort, academic_qualification_phd_master, 
+  authors_id_scopus, department_faculty, s_t_non_s_t,
+  status_1_active_study_leaves_sabbatical_training_attachment_seconded,
+  status_2_permanent_contract, status_3_full_time_part_time ,status_4_active_staff_yes_no,
+  citizenship_local_foreign, country) |> 
+    filter(year == 2024)
 ```
 
 ### penerbitan_data
@@ -189,10 +195,20 @@ merged_counts_2024 <- count_publications_2024 |>
   select(!(year)) |> 
   rename(year = year.x) |>
   mutate(across(everything(), ~replace_na(., 0)))
+
+merged_counts_2024 <- count_publications_2024 |> 
+  full_join(count_grants_2024, by = "staff_id") |> 
+  full_join(count_innovations_2024, by = "staff_id") |> 
+      select(!(year)) |> 
+        rename(year = year.x) |>
+          mutate(across(everything(), ~replace_na(., 0)))
 ```
 
 ## Merge with demography
 
 ```{r}
-
+merged_count_2024_demography <- merged_counts_2024 |>
+  full_join(staff_demography_data_2024, by = "staff_id") |>
+   filter(!is.na(year.x)) |>
+    rename(year = year.x)
 ```
